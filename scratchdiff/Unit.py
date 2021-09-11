@@ -81,17 +81,4 @@ def mul(t1, t2):
     out.derivative = _derivative
     return out    
 
-# w1 = Unit(2)
-# w2 = Unit(3)
-
-# w3 = add(sin(w1), mul(w2, w1)) 
-# w3.backward_pass()
-# print(w1.grad.data)
-# print(w2.grad.data)
-
-
-
-
-
-# x_grad = 2*sin(y)*cos(y)
 
