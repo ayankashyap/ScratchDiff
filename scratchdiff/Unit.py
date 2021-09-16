@@ -1,3 +1,4 @@
+from typing import ValuesView
 import numpy as np
 
 
@@ -5,6 +6,7 @@ class Unit:
     def __init__(self, data, requires_grad=True, children=[]):
         """Main computation class in the engine"""
         self.data = data if isinstance(data, np.ndarray) else np.array(data)
+
         self.grad, self.requires_grad = None, requires_grad
         self.children = children
         self.derivative = lambda: None
@@ -90,6 +92,8 @@ def add(t1, t2):
 
     def _add_Backward():
         if t1.requires_grad:
+            print(out.grad.data)
+            print(t1.grad.data)
             t1.grad.data += out.grad.data
         if t2.requires_grad:
             t2.grad.data += out.grad.data
@@ -134,22 +138,38 @@ def matmul(t1, t2):
     if t1.shape[-1] != t2.shape[0]:
         raise ValueError(f"Shapes dont align: {t1.shape[-1]}!={t2.shape[0]}")
 
+    if len(t1.data.shape) < 2 and len(t2.data.shape) < 2:
+        raise ValueError(
+            f"Matmul requires atleast one matrix, use dot for vector multiplication"
+        )
+
     out = Unit(t1.data @ t2.data, children=[t1, t2])
 
     def _matmul_Backward():
         # grad.data is always in the form of a vector/matrix of ones in the shape of AB,
         #  since we always have to do a reduction of the output tensor
         if t1.requires_grad:
-            # matrix mul: C = AB , grad(C)w.r.t A = B^Transpose
-            if len(out.grad.shape)>1:
-                t1.grad.data += np.swapaxes(out.grad.data, -2, -1) @ t2.data.T
+            t1.grad.data += out.grad.data @ t2.data.T
         if t2.requires_grad:
-            # matrix mul: C = AB , grad(C)w.r.t B = A
-            print(t1.shape)
-            print(out.grad.shape)
-            t2.grad.data += t1.data @ out.grad.data
+            t2.grad.data += t1.data.T @ out.grad.data
 
     out.derivative = _matmul_Backward
+    return out
+
+
+def dot(t1, t2):
+    t1 = t1 if isinstance(t1, Unit) else Unit(t1)
+    t2 = t2 if isinstance(t2, Unit) else Unit(t2)
+
+    out = Unit(t1.data.dot(t2.data), children=[t1, t2])
+
+    def _dot_backward():
+        if t1.requires_grad:
+            t1.grad.data += t2.data * out.grad.data
+        if t2.requires_grad:
+            t2.grad.data += t1.data * out.grad.data
+
+    out.derivative = _dot_backward
     return out
 
 
@@ -159,10 +179,18 @@ def sum(t):
 
     def _sum_Backward():
         if t.requires_grad:
-            print(out.grad.data)
             t.grad.data += np.ones_like(t.data) * out.grad.data
 
     out.derivative = _sum_Backward
     return out
 
 
+w = Unit([2, 2, 2])
+x = Unit([1, 1, 1])
+b =Unit([1,1,1])
+z = sum(add(dot(w, x), b))
+print(z)
+z.backward_pass()
+print(x.grad)
+print(w.grad)
+print(b.grad)
