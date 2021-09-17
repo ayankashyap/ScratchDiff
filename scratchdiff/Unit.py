@@ -92,11 +92,9 @@ def add(t1, t2):
 
     def _add_Backward():
         if t1.requires_grad:
-            print(out.grad.data)
-            print(t1.grad.data)
-            t1.grad.data += out.grad.data
+            t1.grad.data = t1.grad.data + out.grad.data
         if t2.requires_grad:
-            t2.grad.data += out.grad.data
+            t2.grad.data = t2.grad.data + out.grad.data
 
     out.derivative = _add_Backward
     return out
@@ -184,13 +182,3 @@ def sum(t):
     out.derivative = _sum_Backward
     return out
 
-
-w = Unit([2, 2, 2])
-x = Unit([1, 1, 1])
-b =Unit([1,1,1])
-z = sum(add(dot(w, x), b))
-print(z)
-z.backward_pass()
-print(x.grad)
-print(w.grad)
-print(b.grad)
