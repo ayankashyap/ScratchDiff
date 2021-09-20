@@ -1,11 +1,12 @@
-from typing import ValuesView
 import numpy as np
 
 
 class Unit:
     def __init__(self, data, requires_grad=True, children=[]):
         """Main computation class in the engine"""
-        self.data = data if isinstance(data, np.ndarray) else np.array(data)
+        self.data = (
+            data if isinstance(data, np.ndarray) else np.array(data, dtype="float32")
+        )
 
         self.grad, self.requires_grad = None, requires_grad
         self.children = children
@@ -85,6 +86,32 @@ def power(t, n):
     return out
 
 
+def neg(t):
+    t = t if isinstance(t, Unit) else Unit(t)
+    out = Unit(-t.data, children=[t])
+    
+    def _neg_Backward():
+        if t.requires_grad:
+            t.grad.data = t.grad.data - out.grad.data
+
+    out.derivative = _neg_Backward
+    return out
+
+def compress_gradient(grad, other_tensor_shape):
+    """
+        Returns the gradient but compressed (needed when gradient shape mismatch during reverse mode).
+        Paramaters:
+        - grad: gradient.
+        - other_tensor_shape: shape of target tensor.
+    """
+    ndims_added = grad.data.ndim - len(other_tensor_shape)
+    for _ in range(ndims_added): 
+        grad.data = np.sum(grad.data, axis=0)         
+    for i, dim in enumerate(other_tensor_shape):
+        if dim == 1: 
+            grad.data = np.sum(grad.data, axis=i, keepdims=True) 
+    return grad
+
 def add(t1, t2):
     t1 = t1 if isinstance(t1, Unit) else Unit(t1)
     t2 = t2 if isinstance(t2, Unit) else Unit(t2)
@@ -92,9 +119,9 @@ def add(t1, t2):
 
     def _add_Backward():
         if t1.requires_grad:
-            t1.grad.data = t1.grad.data + out.grad.data
+            t1.grad.data += compress_gradient(out.grad.data, t1.data.shape)
         if t2.requires_grad:
-            t2.grad.data = t2.grad.data + out.grad.data
+            t2.grad.data += compress_gradient(out.grad.data, t2.data.shape)
 
     out.derivative = _add_Backward
     return out
@@ -171,14 +198,76 @@ def dot(t1, t2):
     return out
 
 
-def sum(t):
+def sum(t, axis=None, keepdims=True):
     t = t if isinstance(t, Unit) else Unit(t)
-    out = Unit(np.sum(t.data), children=[t])
+    out = Unit(np.sum(t.data, axis=axis, keepdims=keepdims), children=[t])
 
     def _sum_Backward():
         if t.requires_grad:
-            t.grad.data += np.ones_like(t.data) * out.grad.data
+            if axis!=None and self.keepdims == False:
+                t.grad.data += np.ones_like(t.data) * np.expand_dims(out.grad.data, axis=axis)
+            else:
+                t.grad.data += np.ones_like(t.data) * out.grad.data
+
 
     out.derivative = _sum_Backward
     return out
 
+
+def relu(t):
+    t = t if isinstance(t, Unit) else Unit(t)
+    out = Unit(np.maximum(t.data, 0), children=[t])
+
+    def _relu_backward():
+        if t.requires_grad:
+            t.grad.data += out.grad.data * (t.data > 0)
+
+    out.derivative = _relu_backward
+    return out
+
+
+def sigmoid(t):
+    t = t if isinstance(t, Unit) else Unit(t)
+    out = Unit(1.0 / (1 + np.exp(-t.data)), children=[t])
+
+    def _sigmoid_backward():
+        if t.requires_grad:
+            t.grad.data += out.grad.data * out.data * (1 - out.data)
+
+    out.derivative = _sigmoid_backward
+    return out
+
+#def logsoftmax(t):
+#    t = t if isinstance(t, Unit) else Unit(t)
+#    c = np.max(t.data, axis=1)
+#    out = t.data - c.reshape((-1,1)) - np.log(np.exp(t.data - c.reshape((-1,1))).sum(axis=1)).reshape(-1,1)
+#    out = Unit(out)
+#    
+#    def _logsoftmax_backward():
+#        if t.requires_grad:
+#            t.grad.data += 
+#
+
+def exp(t):
+    t = t if isinstance(t, Unit) else Unit(t)
+    out = Unit(np.exp(t.data), children=[t])
+
+    def _exp_backward():
+        if t.requires_grad:
+            t.grad.data += out.grad.data * out.data
+
+    out.derivative = _exp_backward
+    return out
+
+
+def log(t):
+    t = t if isinstance(t, Unit) else Unit(t)
+    out = Unit(np.log(t.data), children=[t])
+
+    def _log_backward():
+        # natural log
+        if t.requires_grad:
+            t.grad.data += out.grad.data / t.data
+
+    out.derivative = _log_backward
+    return out
