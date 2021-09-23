@@ -97,20 +97,6 @@ def neg(t):
     out.derivative = _neg_Backward
     return out
 
-def compress_gradient(grad, other_tensor_shape):
-    """
-        Returns the gradient but compressed (needed when gradient shape mismatch during reverse mode).
-        Paramaters:
-        - grad: gradient.
-        - other_tensor_shape: shape of target tensor.
-    """
-    ndims_added = grad.data.ndim - len(other_tensor_shape)
-    for _ in range(ndims_added): 
-        grad.data = np.sum(grad.data, axis=0)         
-    for i, dim in enumerate(other_tensor_shape):
-        if dim == 1: 
-            grad.data = np.sum(grad.data, axis=i, keepdims=True) 
-    return grad
 
 def add(t1, t2):
     t1 = t1 if isinstance(t1, Unit) else Unit(t1)
@@ -119,9 +105,9 @@ def add(t1, t2):
 
     def _add_Backward():
         if t1.requires_grad:
-            t1.grad.data += compress_gradient(out.grad.data, t1.data.shape)
+            t1.grad.data += out.grad.data
         if t2.requires_grad:
-            t2.grad.data += compress_gradient(out.grad.data, t2.data.shape)
+            t2.grad.data += out.grad.data
 
     out.derivative = _add_Backward
     return out
@@ -237,16 +223,20 @@ def sigmoid(t):
     out.derivative = _sigmoid_backward
     return out
 
-#def logsoftmax(t):
-#    t = t if isinstance(t, Unit) else Unit(t)
-#    c = np.max(t.data, axis=1)
-#    out = t.data - c.reshape((-1,1)) - np.log(np.exp(t.data - c.reshape((-1,1))).sum(axis=1)).reshape(-1,1)
-#    out = Unit(out)
-#    
-#    def _logsoftmax_backward():
-#        if t.requires_grad:
-#            t.grad.data += 
-#
+def logsoftmax(t):
+    t = t if isinstance(t, Unit) else Unit(t)
+    c = np.max(t.data, axis=1)
+    logexpsum = c + np.log(np.exp(t.data - c.reshape((-1,1))).sum(axis=1)) 
+    out = Unit(t.data - logexpsum.reshape((-1,1)))
+
+    def _logsoftmax_backward():
+        if t.requires_grad:     
+            #t.grad.data += out.grad.data - np.exp(out.data)*out.grad.data.sum(axis=1).reshape((-1,1))
+            t.grad.data += out.grad.data * (1 - np.exp(out.data)*out.grad.data.sum(axis=1))                
+
+    out.derivative = _logsoftmax_backward
+    return out
+
 
 def exp(t):
     t = t if isinstance(t, Unit) else Unit(t)
