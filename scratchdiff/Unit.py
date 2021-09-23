@@ -227,12 +227,11 @@ def logsoftmax(t):
     t = t if isinstance(t, Unit) else Unit(t)
     c = np.max(t.data, axis=1)
     logexpsum = c + np.log(np.exp(t.data - c.reshape((-1,1))).sum(axis=1)) 
-    out = Unit(t.data - logexpsum.reshape((-1,1)))
+    out = Unit(t.data - logexpsum.reshape((-1,1)), children=[t])
 
     def _logsoftmax_backward():
         if t.requires_grad:     
-            #t.grad.data += out.grad.data - np.exp(out.data)*out.grad.data.sum(axis=1).reshape((-1,1))
-            t.grad.data += out.grad.data * (1 - np.exp(out.data)*out.grad.data.sum(axis=1))                
+            t.grad.data += out.grad.data - np.exp(out.data)*out.grad.data.sum(axis=1).reshape((-1,1))                
 
     out.derivative = _logsoftmax_backward
     return out

@@ -62,8 +62,6 @@ y_pred = [i[0] for i in yhat.data]
 
 ### TODOS in the future if I ever come back to this
 
-- [ ] Write proper backwards pass functions for add, the current isn't robust to matrix shape
-
+- [x] MNIST classifier
 - [ ] classes for linear, conv, optimizers, etc
 
-- [ ] complete mnist
